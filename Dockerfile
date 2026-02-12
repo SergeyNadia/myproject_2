@@ -1,23 +1,26 @@
-# Используем легковесный образ Python, соответствующий вашей версии
-FROM python:3.11-slim
+# Используем легковесный образ Python 3.12
+FROM python:3.12-slim-bookworm
 
-# Устанавливаем системные зависимости для работы с Excel и SQLite (нужно для Chroma)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libsqlite3-dev \
+# Устанавливаем системные зависимости для psycopg2 и работы с сетью
+RUN apt-get update -o Acquire::ForceIPv4=true && \
+    apt-get install -y --no-install-recommends \
+    libpq-dev \
+    gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем рабочую директорию внутри контейнера
+# Создаем рабочую директорию
 WORKDIR /app
 
-# Сначала копируем только requirements, чтобы Docker закешировал установку библиотек
+# Сначала копируем только requirements, чтобы использовать кэширование слоев Docker
 COPY requirements.txt .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем остальные файлы проекта
+# Копируем остальной код
 COPY . .
 
-# Команда по умолчанию (запуск индексации)
-CMD ["python", "incialization.py"]
+# Открываем порт для FastAPI
+EXPOSE 8080
+
+# Команда для запуска (через модуль src.api.main)
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8080"]

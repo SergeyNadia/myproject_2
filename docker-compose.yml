@@ -1,13 +1,53 @@
-# version: '3.8'
+name: sql_genius
 
 services:
-  rag-app:
-    build: .
-    container_name: tula_rag_system
-    volumes:
-      # Пробрасываем папки, чтобы данные сохранялись на вашем компьютере
-      - .:/app
-      - ./db_metadata:/app/db_metadata
-      - ./chroma_db_store:/app/chroma_db_store
+  # Наша локальная база метаданных
+  db:
+    image: postgres:15
+    container_name: sql_metadata_db
     environment:
-      - PYTHONUNBUFFERED=1
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_DB: ${POSTGRES_DB:-metadata_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Магия: все .sql файлы из этой папки выполнятся при старте
+      - ./docker/db_init:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d metadata_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Векторная база для RAG
+  chroma:
+    image: chromadb/chroma
+    container_name: chroma_db
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/data
+
+  # Наше FastAPI приложение
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      network: host
+    container_name: sql_genius_app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    # Для разработки удобно монтировать код внутрь
+    volumes:
+      - ./src:/app/src
+
+volumes:
+  postgres_data:
+  chroma_data:
