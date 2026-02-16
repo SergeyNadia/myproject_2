@@ -4,9 +4,12 @@ FROM python:3.12-slim-bookworm
 # Устанавливаем системные зависимости для psycopg2 и работы с сетью
 RUN apt-get update -o Acquire::ForceIPv4=true && \
     apt-get install -y --no-install-recommends \
+    build-essential \
     libpq-dev \
-    gcc \
     curl \
+    iputils-ping \
+    telnet \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем рабочую директорию

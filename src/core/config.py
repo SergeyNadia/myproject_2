@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     SOURCE_DB_URL: str
     LOCAL_DB_URL: str
     OPENROUTER_API_KEY: str
+    LOG_LEVEL: str = "INFO" 
     
     class Config:
         env_file = ".env"

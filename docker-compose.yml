@@ -37,6 +37,7 @@ services:
       dockerfile: Dockerfile
       network: host
     container_name: sql_genius_app
+    network_mode: "host"
     depends_on:
       db:
         condition: service_healthy
@@ -47,6 +48,12 @@ services:
     # Для разработки удобно монтировать код внутрь
     volumes:
       - ./src:/app/src
+      - ./data:/app/data
+    extra_hosts:
+      - "tula-db2:10.209.109.230"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
 volumes:
   postgres_data:
