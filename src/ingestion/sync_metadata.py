@@ -16,7 +16,8 @@ def sync_from_json(json_path: str):
     
     """Загрузка метаданных из JSON-файла в локальную БД."""
     with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+        # content = f.read()
+        data = json.load(f, strict=False)
     
     # Извлекаем список строк (значение по ключу с SQL-запросом)
     # Берем первый ключ, так как в твоем файле SQL-запрос — это ключ
@@ -63,4 +64,4 @@ def sync_from_json(json_path: str):
         print(f"Ошибка синхронизации: {e}")
 
 if __name__ == "__main__":
-    sync_from_json('data/schemas/tula-db2(public).json')
+    sync_from_json('data/schemas/tula_db2(public).json')

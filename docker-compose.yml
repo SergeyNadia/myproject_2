@@ -12,8 +12,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Магия: все .sql файлы из этой папки выполнятся при старте
-      - ./docker/db_init:/docker-entrypoint-initdb.d
+      - ./docker/db_init/init_fixed.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app_user -d metadata_db"]
@@ -37,7 +36,6 @@ services:
       dockerfile: Dockerfile
       network: host
     container_name: sql_genius_app
-    network_mode: "host"
     depends_on:
       db:
         condition: service_healthy
