@@ -12,7 +12,11 @@ class LLMClient:
         """Магия превращения ответа LLM в Pydantic объект"""
         response = self.client.chat.completions.create(
             model="upstage/solar-pro-3:free", # Или любая другая мощная модель
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                # Добавление слова JSON в системную роль — самый надежный способ
+                {"role": "system", "content": "You are a helpful assistant that outputs only JSON."},
+                {"role": "user", "content": prompt}
+            ],
             # Просим модель вернуть JSON
             response_format={ "type": "json_object" } 
         )

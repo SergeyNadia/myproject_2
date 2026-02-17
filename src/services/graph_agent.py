@@ -1,5 +1,7 @@
+import os
 from typing import TypedDict, List, Optional
 from langgraph.graph import StateGraph, END
+from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod
 from src.schemas.models import TableFilterResponse, SQLResponse
 from src.services.llm_client import LLMClient
 from src.services.sql_executor import SQLExecutor
@@ -49,6 +51,9 @@ class SQLGraphAgent:
         # Компилируем граф
         self.app = workflow.compile()
 
+        # Автоматическое сохранение графа при инициализации
+        self.save_graph_visualization()
+
     # --- МЕТОД ДЛЯ FASTAPI ---
     async def run(self, question: str):
         """Точка входа, которую вызывает routes.py"""
@@ -69,10 +74,40 @@ class SQLGraphAgent:
         schemas = self.retriever.search(state['question'])
         return {"relevant_schemas": schemas}
 
-    def select_columns_node(self, state: AgentState):
+    # src/services/graph_agent.py
+
+    def select_columns_node(self, state):
         print("--- ЭТАП: ФИЛЬТРАЦИЯ КОЛОНОК ---")
-        prompt = f"Вопрос: {state['question']}\nСхемы: {state['relevant_schemas']}"
+        
+        # Добавляем слово JSON и жесткую структуру
+        prompt = f"""
+        You are a SQL Architect. 
+        Analyze the user question and the schemas below. 
+        Your goal is to return a JSON object that lists only the necessary tables and columns needed to answer the question.
+        
+        User Question: "{state['question']}"
+        Found Schemas: {state['relevant_schemas']}
+        
+        IMPORTANT: You must return ONLY a JSON object. 
+        The JSON must have a key "selected_tables" which is a list of objects.
+        Each object must contain: "table_name", "relevant_columns", and "reasoning".
+        
+        Example format:
+        {{
+            "selected_tables": [
+                {{
+                    "table_name": "public.f6",
+                    "relevant_columns": ["id", "reg_date"],
+                    "reasoning": "Needed to filter documents by date"
+                }}
+            ]
+        }}
+        """
+        
+        # Вызываем LLM. Убедись, что в llm_client.py передается этот промпт.
         response = self.llm.get_structured_output(prompt, TableFilterResponse)
+        
+        # Теперь Pydantic не упадет, так как мы явно разжевали формат
         return {"filtered_schema": response.selected_tables}
 
     def generate_sql_node(self, state: AgentState):
@@ -89,13 +124,37 @@ class SQLGraphAgent:
     
     def execute_node(self, state: AgentState):
         print("--- ЭТАП: ТЕСТОВЫЙ ЗАПУСК SQL ---")
-        result = self.executor.run_query(state['generated_sql'])
+        executor = SQLExecutor()
+        result = executor.run_query(state['generated_sql'])
         
         if result["status"] == "error":
-            return {"error": result["error_message"], "iteration": state["iteration"] + 1}
+            print(f"ОШИБКА ОТ POSTGRES: {result['error_message']}") # <--- ДОБАВЬ ЭТО
+            return {"error": result["error_message"], "iteration": state.get("iteration", 0) + 1}
         return {"error": None}
 
     def should_continue(self, state: AgentState):
         if state.get("error") and state["iteration"] < 3:
             return "retry"
         return "end"
+    
+    def save_graph_visualization(self):
+        """Сохраняет структуру графа в файл PNG"""
+        try:
+            # Создаем папку, если её нет
+            output_dir = "materials"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            output_path = os.path.join(output_dir, "graph_schema.png")
+            
+            # Генерируем изображение через Mermaid API
+            graph_png = self.app.get_graph().draw_mermaid_png(
+                draw_method=MermaidDrawMethod.API,
+            )
+            
+            with open(output_path, "wb") as f:
+                f.write(graph_png)
+            print(f"--- ГРАФ АГЕНТА СОХРАНЕН: {output_path} ---")
+        except Exception as e:
+            print(f"Ошибка при сохранении графа: {e}")
+            print("Попробуйте установить: pip install pygraphviz")

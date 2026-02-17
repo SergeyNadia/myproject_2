@@ -34,7 +34,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-      network: host
+      # network: host
     container_name: sql_genius_app
     depends_on:
       db:
@@ -47,6 +47,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./data:/app/data
+      - ./materials:/app/materials
     extra_hosts:
       - "tula-db2:10.209.109.230"
     dns:

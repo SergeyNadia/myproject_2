@@ -1,9 +1,10 @@
 # src/core/config.py
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     # Данные берем из .env автоматически
-    SOURCE_DB_URL: str
+    SOURCE_DB_URL: Optional[str] = None
     LOCAL_DB_URL: str
     OPENROUTER_API_KEY: str
     LOG_LEVEL: str = "INFO" 
