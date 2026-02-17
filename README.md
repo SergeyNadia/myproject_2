@@ -51,7 +51,7 @@
 OPENROUTER_API_KEY=ваш_ключ
 LOCAL_DB_URL=postgresql://app_user:app_password@db:5432/metadata_db
 CHROMA_HOST=chroma
-CHROMA_PORT=8000
+CHROMA_PORT=8000```
 
 ###  2. Запуск контейнеров
 
