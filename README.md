@@ -90,6 +90,10 @@ docker exec -it sql_genius_app python -m src.retriever.vector_search
 ```
 ---
 
+##  Построенный граф
+
+![png](/materials/mermaid-drawing.png)
+
 ### Было сделало следующее:
 
 
