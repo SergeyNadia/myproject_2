@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from src.schemas.models import SQLResponse
 from src.services.graph_agent import SQLGraphAgent
+import traceback
 
 router = APIRouter()
 agent = SQLGraphAgent() # Инициализируем наш "мозг"
@@ -24,4 +25,6 @@ async def generate_sql_endpoint(user_query: str):
             explanation=result.get("explanation", "Запрос успешно сгенерирован и проверен.")
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print("--- КРИТИЧЕСКАЯ ОШИБКА В РОУТЕ ---")
+        traceback.print_exc() 
+        raise HTTPException(status_code=500, detail=f"Internal Error: {str(e)}")

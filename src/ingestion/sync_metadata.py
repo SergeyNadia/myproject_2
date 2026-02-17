@@ -1,67 +1,56 @@
-# src/ingestion/sync_metadata.py
-import json
 import psycopg2
-import os
-from psycopg2.extras import execute_values
 from src.core.config import settings
 
-
-def sync_from_json(json_path: str):
-    # Проверка пути (для отладки)
-    full_path = os.path.abspath(json_path)
-    if not os.path.exists(full_path):
-        print(f"ОШИБКА: Файл не найден по пути {full_path}")
-        print(f"Текущая рабочая директория: {os.getcwd()}")
-        return
+def sync_local_metadata():
+    """Считывает структуру public-схемы и сохраняет её в таблицы метаданных."""
+    query = """
+    SELECT 
+        cols.table_schema, 
+        cols.table_name, 
+        cols.column_name, 
+        cols.data_type,
+        'Описание для ' || cols.column_name as column_comment, -- Заглушка, если нет комментов
+        'Таблица ' || cols.table_name as table_comment
+    FROM 
+        information_schema.columns cols
+    WHERE 
+        cols.table_schema = 'public' 
+        AND cols.table_name NOT IN ('table_metadata', 'column_metadata')
+    ORDER BY cols.table_name, cols.ordinal_position;
+    """
     
-    """Загрузка метаданных из JSON-файла в локальную БД."""
-    with open(json_path, 'r', encoding='utf-8') as f:
-        # content = f.read()
-        data = json.load(f, strict=False)
-    
-    # Извлекаем список строк (значение по ключу с SQL-запросом)
-    # Берем первый ключ, так как в твоем файле SQL-запрос — это ключ
-    first_key = list(data.keys())[0]
-    rows = data[first_key]
-
-    print(f"--- Найдено {len(rows)} записей о колонках ---")
-
     try:
         conn = psycopg2.connect(settings.LOCAL_DB_URL)
         with conn:
             with conn.cursor() as cur:
-                # 1. Собираем уникальные таблицы
-                tables = {}
-                for r in rows:
-                    key = (r['table_schema'], r['table_name'])
-                    if key not in tables:
-                        tables[key] = r['table_comment']
+                # 1. Читаем структуру
+                cur.execute(query)
+                rows = cur.fetchall()
                 
-                # 2. Вставляем таблицы
-                table_data = [(s, t, c) for (s, t), c in tables.items()]
-                execute_values(cur, """
-                    INSERT INTO table_metadata (schema_name, table_name, table_description)
-                    VALUES %s ON CONFLICT (schema_name, table_name) DO UPDATE 
-                    SET table_description = EXCLUDED.table_description
-                """, table_data)
+                # 2. Собираем уникальные таблицы
+                tables = set((r[0], r[1], r[5]) for r in rows)
+                for schema, name, desc in tables:
+                    cur.execute("""
+                        INSERT INTO table_metadata (schema_name, table_name, table_description)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (schema_name, table_name) DO UPDATE SET table_description = EXCLUDED.table_description
+                    """, (schema, name, desc))
 
-                # 3. Мапим имена таблиц на ID
-                cur.execute("SELECT id, schema_name, table_name FROM table_metadata")
-                table_map = {(row[1], row[2]): row[0] for row in cur.fetchall()}
+                # 3. Мапим имена на ID
+                cur.execute("SELECT id, table_name FROM table_metadata")
+                table_map = {name: tid for tid, name in cur.fetchall()}
 
                 # 4. Вставляем колонки
-                col_data = [
-                    (table_map[(r['table_schema'], r['table_name'])], r['column_name'], ...)
-                    for r in rows if (r['table_schema'], r['table_name']) in table_map
-                ]
-                execute_values(cur, """
-                    INSERT INTO column_metadata (table_id, column_name, data_type, column_description)
-                    VALUES %s ON CONFLICT DO NOTHING
-                """, col_data)
-
-        print(f"--- Успешно синхронизировано {len(tables)} таблиц ---")
+                for r in rows:
+                    cur.execute("""
+                        INSERT INTO column_metadata (table_id, column_name, data_type, column_description)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, (table_map[r[1]], r[2], r[3], r[4]))
+                    
+        print(f"Успешно синхронизировано {len(tables)} таблиц.")
     except Exception as e:
-        print(f"Ошибка синхронизации: {e}")
+        print(f"Ошибка: {e}")
 
 if __name__ == "__main__":
-    sync_from_json('data/schemas/tula_db2(public).json')
+    sync_local_metadata()

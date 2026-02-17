@@ -4,7 +4,7 @@
 # ML и Векторный поиск (CPU-only версии)
 torch
 sentence-transformers==2.5.1
-chromadb==0.4.24
+chromadb==0.5.23
 
 # API и сервер
 fastapi==0.110.0

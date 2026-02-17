@@ -22,7 +22,7 @@ services:
 
   # Векторная база для RAG
   chroma:
-    image: chromadb/chroma
+    image: chromadb/chroma:0.5.23
     container_name: chroma_db
     ports:
       - "8000:8000"
@@ -51,7 +51,7 @@ services:
       - "tula-db2:10.209.109.230"
     dns:
       - 8.8.8.8
-      - 1.1.1.1
+      - 8.8.4.4
 
 volumes:
   postgres_data:

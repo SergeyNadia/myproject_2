@@ -1,31 +1,48 @@
-# src/services/sql_generator.py
-import openrouter  # Или используй стандартный openai клиент для OpenRouter
+# src/services/sql_executor.py
+# import openrouter  # Или используй стандартный openai клиент для OpenRouter
 from chromadb.utils import embedding_functions
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from src.core.config import settings
+import psycopg2
 
-class SQLGenerator:
+
+class SQLExecutor:
     def __init__(self):
-        # Подключаемся к нашей "карте" (ChromaDB)
-        self.chroma_client = chromadb.HttpClient(host='localhost', port=8000)
+        # 1. Сначала создаем сам клиент
+        self.chroma_client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST,
+            port=settings.CHROMA_PORT,
+            settings=ChromaSettings(anonymized_telemetry=False)
+        )
         
         # Модель должна быть той же, что и при индексации!
         self.emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name="paraphrase-multilingual-MiniLM-L12-v2"
         )
+
         self.collection = self.chroma_client.get_collection(
-            name="table_schemas", 
-            embedding_function=self.emb_fn
+            name="table_schemas"
         )
 
+        self.db_url = settings.LOCAL_DB_READ_ONLY_URL
+
     def run_query(self, sql: str):
+        """Безопасное выполнение SQL запроса"""
         try:
-            with psycopg2.connect(self.db_url) as conn:
+            # В идеале здесь должен быть read-only пользователь
+            conn = psycopg2.connect(self.db_url)
+            with conn:
                 with conn.cursor() as cur:
                     cur.execute(sql)
-                    # Нам не нужны все данные, возьмем только 5 строк для проверки
-                    res = cur.fetchmany(5)
-                    return {"status": "success", "sample_data": res}
+                    # Берем только первые 5 строк для превью
+                    columns = [desc[0] for desc in cur.description]
+                    rows = cur.fetchmany(5)
+                    return {
+                        "status": "success", 
+                        "columns": columns,
+                        "data": rows
+                    }
         except Exception as e:
             return {"status": "error", "error_message": str(e)}
 

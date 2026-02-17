@@ -1,8 +1,36 @@
-# src/retriever/indexer.py
+# src/retriever/vector_search.py
 import chromadb
 from chromadb.utils import embedding_functions
 import psycopg2
+from chromadb.config import Settings as ChromaSettings
 from src.core.config import settings
+import logging
+
+
+class TableRetriever:
+    def __init__(self):
+        # Подключаемся к той же коллекции, которую создали при индексации
+        self.client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST, 
+            port=settings.CHROMA_PORT,
+            settings=ChromaSettings(anonymized_telemetry=False)
+        )
+        self.emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name="paraphrase-multilingual-MiniLM-L12-v2"
+        )
+        self.collection = self.client.get_or_create_collection(
+            name="table_schemas", 
+            embedding_function=self.emb_fn
+        )
+
+    def search(self, query: str, n_results: int = 5) -> list[str]:
+        """Ищет наиболее подходящие схемы таблиц по вопросу."""
+        results = self.collection.query(
+            query_texts=[query], 
+            n_results=n_results
+        )
+        # Возвращаем список текстов схем (они лежат в 'documents')
+        return results['documents'][0]
 
 def get_metadata_from_db():
     """Вытаскиваем то, что мы синхронизировали в локальную БД."""
@@ -24,8 +52,12 @@ def get_metadata_from_db():
 
 def create_vector_index():
     # 1. Инициализируем ChromaDB (она должна быть запущена в Docker)
-    client = chromadb.HttpClient(host='localhost', port=8000)
+    client = chromadb.HttpClient(host=settings.CHROMA_HOST, 
+                                 port=settings.CHROMA_PORT,
+                                 settings=ChromaSettings(anonymized_telemetry=False)
+                                 )
     
+    logging.info("Инициализация модели эмбеддингов (это может занять время при первом запуске)...")
     # 2. Выбираем модель эмбеддингов. 
     # Для русского языка хорошо подойдет что-то вроде 'paraphrase-multilingual-MiniLM-L12-v2'
     emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -65,3 +97,4 @@ def create_vector_index():
 
 if __name__ == "__main__":
     create_vector_index()
+    logging.info("Модель готова. Начинаю индексацию...")
